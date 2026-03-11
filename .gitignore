@@ -2,10 +2,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.log
 .venv/
 .env
-.streamlit/secrets.toml
-*.mp4
-*.avi
-*.mov
+*.log

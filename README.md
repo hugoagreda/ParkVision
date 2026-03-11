@@ -1,198 +1,275 @@
 # ParkVision
 
-MVP de vision por computadora para detectar ocupacion de plazas de aparcamiento desde camaras publicas.
+Repositorio base para MVP de deteccion de plazas de parking con vision por computadora.
 
-## Objetivo
+## Enfoque actual
 
-Detectar vehiculos con YOLOv8, evaluar plazas fijas y exponer disponibilidad por API y dashboard.
+Antes de tiempo real, vamos en modo offline con videos de prueba.
 
-## Estructura del Repositorio
+Objetivo inmediato:
 
-```text
-ParkVision/
-	backend/
-		api/
-			routes/
-				occupancy.py
-			main.py
-		core/
-			config.py
-		models/
-			schemas.py
-		services/
-			occupancy_service.py
-	config/
-		parking_spots.example.json
-		settings.yaml
-	cv_pipeline/
-		detector/
-			yolo_detector.py
-		ingestion/
-			video_source.py
-		parking/
-			spot_manager.py
-		pipeline.py
-	dashboard/
-		app.py
-	scripts/
-		run_api.py
-		run_dashboard.py
-	utils/
-		logging.py
-	.env.example
-	.gitignore
-	Makefile
-	pyproject.toml
-	requirements.txt
-	README.md
-```
+- procesar 2 videos ya grabados
+- validar deteccion y logica de ocupacion
+- generar resultados por frame y resumen por video
 
-## Modulos
+## Que es ParkVision
 
-- `cv_pipeline/ingestion/video_source.py`: lectura de stream desde camara o archivo.
-- `cv_pipeline/detector/yolo_detector.py`: carga de YOLOv8 (Ultralytics) e inferencia por frame.
-- `cv_pipeline/parking/spot_manager.py`: logica de ocupacion por plaza basada en poligonos fijos.
-- `cv_pipeline/pipeline.py`: orquestacion de ingest, deteccion y evaluacion de plazas.
-- `backend/services/occupancy_service.py`: loop de procesamiento en segundo plano y estado actual.
-- `backend/api/routes/occupancy.py`: endpoint para consultar estado de ocupacion.
-- `backend/api/main.py`: app FastAPI y arranque del servicio.
-- `dashboard/app.py`: interfaz Streamlit para visualizar plazas ocupadas/libres.
-- `backend/core/config.py`: configuracion central via variables de entorno.
-- `backend/models/schemas.py`: contratos de respuesta para API.
-- `config/parking_spots.example.json`: ejemplo de plazas definidas por poligonos.
+ParkVision es un prototipo para ciudades y municipios que permite estimar en tiempo real la ocupacion de plazas de aparcamiento a partir de camaras publicas.
 
-## Flujo MVP
+La idea principal es transformar un feed de video en informacion util para operacion urbana:
 
-1. `VideoSource` captura frames.
-2. `YoloDetector` detecta vehiculos (`car`, `truck`, `bus`, `motorcycle`).
-3. `SpotManager` marca cada plaza como ocupada/libre segun el centro del bounding box.
-4. `OccupancyService` mantiene el ultimo estado en memoria.
-5. FastAPI expone `GET /occupancy/latest`.
-6. Streamlit consulta el endpoint y muestra disponibilidad.
+- cuantas plazas estan ocupadas
+- cuantas plazas estan libres
+- estado individual por plaza
 
-## Instalacion
+Con esto se puede construir una base para cuadros de mando, alertas y futuras integraciones con apps ciudadanas.
 
-Comandos para crear y activar el entorno virtual en Windows.
+## Problema que resuelve
 
-PowerShell:
+En muchos aparcamientos publicos no existe una vision centralizada del nivel de ocupacion. Eso provoca:
+
+- mas tiempo buscando plaza
+- mas trafico innecesario en zonas de alta demanda
+- menor capacidad de reaccion operativa
+
+ParkVision propone una solucion ligera para empezar:
+
+- usar deteccion de vehiculos con YOLOv8
+- definir plazas fijas por poligonos
+- exponer el estado por API
+- visualizarlo en un dashboard simple
+
+## Alcance del MVP
+
+El MVP esta pensado para validar el enfoque tecnico, no para cubrir todos los casos complejos de produccion.
+
+Incluye:
+
+- ingesta desde camara o archivo de video
+- deteccion de vehiculos por frame
+- logica de ocupacion por plaza
+- API REST para consultar estado actual
+- dashboard para seguimiento basico
+
+No incluye aun:
+
+- persistencia historica de datos
+- autenticacion/autorizacion
+- multi-camara distribuida
+- calibracion automatica de plazas
+
+## Funcionalidades previstas
+
+1. Ingesta de stream de video (`camera index` o fichero).
+2. Deteccion de objetos con YOLOv8.
+3. Filtrado de clases de vehiculo (car, truck, bus, motorcycle).
+4. Evaluacion de ocupacion por plaza a partir de poligonos configurables.
+5. Publicacion del estado en endpoint HTTP.
+6. Visualizacion en dashboard con refresco periodico.
+
+## Arquitectura (alto nivel)
+
+- `cv_pipeline/`: procesamiento de video y logica de ocupacion.
+- `backend/`: servicio FastAPI y contratos de datos.
+- `dashboard/`: interfaz Streamlit para operacion MVP.
+- `config/`: parametros y definicion de plazas.
+- `scripts/`: comandos de arranque.
+
+## Flujo de datos
+
+1. Se captura un frame del stream.
+2. YOLO detecta bounding boxes de vehiculos.
+3. Se cruza cada deteccion con los poligonos de plazas.
+4. Se calcula el estado ocupado/libre por plaza.
+5. El backend guarda el ultimo estado en memoria.
+6. API y dashboard consumen ese estado.
+
+## Casos de uso iniciales
+
+- Monitor de ocupacion para personal municipal.
+- Demo tecnica para presentar viabilidad del sistema.
+- Base de prueba para evolucionar a multi-camara.
+
+## Roadmap corto
+
+- Paso 3: pipeline CV basico.
+- Paso 4: API FastAPI con endpoint de ocupacion.
+- Paso 5: dashboard Streamlit.
+- Paso 6: mejoras de robustez y observabilidad.
+
+## Paso 3 - Pipeline CV Basico (implementado)
+
+En este paso construimos el nucleo tecnico que transforma video en estado de ocupacion.
+
+### Modulos creados en Paso 3
+
+- `cv_pipeline/ingestion/video_source.py`
+	- Se encarga de abrir la fuente de video (camara o archivo).
+	- Va devolviendo `(frame, frame_index)` para que el resto del sistema procese secuencialmente.
+
+- `cv_pipeline/detector/yolo_detector.py`
+	- Carga el modelo YOLOv8 (`ultralytics`).
+	- Ejecuta inferencia por frame.
+	- Filtra solo clases de vehiculo: `car`, `truck`, `bus`, `motorcycle`.
+
+- `cv_pipeline/parking/spot_manager.py`
+	- Carga plazas desde `config/parking_spots.example.json`.
+	- Evalua plaza por plaza si esta ocupada usando el centro del bounding box dentro del poligono.
+
+- `cv_pipeline/pipeline.py`
+	- Orquesta los 3 bloques anteriores.
+	- Devuelve un estado por frame con:
+		- timestamp
+		- total/ocupadas/libres
+		- estado por plaza
+		- detecciones
+
+- `scripts/run_pipeline_demo.py`
+	- Script CLI para prueba rapida de una sola fuente.
+	- Imprime resultados JSON por frame en consola.
+
+- `scripts/run_offline_batch.py`
+	- Script CLI para procesar uno o varios videos (incluyendo tus 2 videos de test).
+	- Genera ficheros de salida en `outputs/offline/`:
+		- `*_frames.jsonl` (estado por frame)
+		- `*_summary.json` (resumen por video)
+		- `batch_summary.json` (resumen global del lote)
+
+- `scripts/select_yolo_roi.py`
+	- Script interactivo para extraer el primer frame y seleccionar con raton la zona donde quieres aplicar YOLO.
+	- Guarda la ROI en `config/yolo_roi.json`.
+
+### Configuracion de plazas de ejemplo
+
+Se actualizo `config/parking_spots.example.json` con 3 plazas (`A1`, `A2`, `A3`) para pruebas iniciales.
+
+## Flujo completo y comandos concretos
+
+Este flujo cubre todo el Paso 3 de punta a punta en Windows PowerShell: preparar entorno, definir zonas, ejecutar test y generar video anotado con YOLO.
+
+### 1) Preparar entorno (solo primera vez)
+
+Desde la raiz del repo (`C:\Users\Hugo\Downloads\ParkVision`):
 
 ```powershell
-python -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-CMD:
+### 2) Colocar videos de prueba
 
-```bat
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-```
+Ubica los videos en:
 
-## Ritmo Global (Comandos End-to-End)
+- `data/videos/test_1.mp4`
+- `data/videos/test_2.mp4`
 
-PowerShell (flujo recomendado):
+### 3) Dibujar plazas para cada video
 
-```powershell
-cd C:\Users\Hugo\Downloads\ParkVision
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-python scripts\run_api.py
-```
+Importante: cada camara/angulo necesita su propio archivo de zonas.
 
-En una segunda terminal PowerShell:
+Para `test_1.mp4`:
 
 ```powershell
-cd C:\Users\Hugo\Downloads\ParkVision
 .\.venv\Scripts\Activate.ps1
-python scripts\run_dashboard.py
+python scripts\select_yolo_roi.py --video ".\data\videos\test_1.mp4" --output "config\yolo_roi_test1.json"
 ```
 
-CMD (equivalente):
+Para `test_2.mp4`:
 
-```bat
-cd /d C:\Users\Hugo\Downloads\ParkVision
-.venv\Scripts\activate.bat
-pip install -r requirements.txt
-copy .env.example .env
-python scripts\run_api.py
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts\select_yolo_roi.py --video ".\data\videos\test_2.mp4" --output "config\yolo_roi_test2.json"
 ```
 
-En una segunda terminal CMD:
+Controles del editor de zonas:
 
-```bat
-cd /d C:\Users\Hugo\Downloads\ParkVision
-.venv\Scripts\activate.bat
-python scripts\run_dashboard.py
+- click+drag en espacio vacio: crear nueva zona
+- arrastrar vertice: ajustar zona
+- `u` o `Ctrl+Z`: deshacer
+- `r`: rehacer
+- `d`: borrar zona activa
+- `s` o `Enter`: guardar
+- `q` o `Esc`: salir sin guardar
+
+### 4) Ejecutar test offline + generar video YOLO anotado
+
+`run_offline_batch.py` ahora genera tambien un MP4 anotado por video (`*_annotated.mp4`) con:
+
+- bounding boxes YOLO
+- confianza por deteccion
+- zonas en verde/rojo (libre/ocupada)
+- contador `Occ: ocupadas/total`
+
+Ejecuta `test_1` con sus zonas:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts\run_offline_batch.py --videos ".\data\videos\test_1.mp4" --spots "config\yolo_roi_test1.json" --max-frames 0
 ```
 
-## Configuracion
+Comando directo para ejecutar solo `test1` (si ya tienes el entorno activo):
 
-1. Copiar `.env.example` a `.env`.
-2. Ajustar `VIDEO_SOURCE` (camara `0` o ruta de video).
-3. Ajustar `SPOT_CONFIG_PATH` si usas otro archivo de plazas.
-
-Variables relevantes:
-
-- `VIDEO_SOURCE`
-- `YOLO_MODEL_PATH`
-- `YOLO_CONFIDENCE`
-- `SPOT_CONFIG_PATH`
-- `API_HOST`
-- `API_PORT`
-- `DASHBOARD_API_BASE_URL`
-
-## Ejecucion
-
-API:
-
-```bash
-python scripts/run_api.py
+```powershell
+python scripts\run_offline_batch.py --videos ".\data\videos\test_1.mp4" --spots "config\yolo_roi_test1.json" --max-frames 0
 ```
 
-Dashboard:
+Ejecuta `test_2` con sus zonas:
 
-```bash
-python scripts/run_dashboard.py
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts\run_offline_batch.py --videos ".\data\videos\test_2.mp4" --spots "config\yolo_roi_test2.json" --max-frames 0
 ```
 
-Tambien puedes usar:
+Si quieres correr ambos en una sola ejecucion (solo valido si comparten exactamente el mismo mapa de plazas):
 
-```bash
-make api
-make dashboard
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts\run_offline_batch.py --videos ".\data\videos\test_1.mp4" ".\data\videos\test_2.mp4" --spots "config\yolo_roi_test1.json" --max-frames 0
 ```
 
-## Endpoints
+### 5) Salidas generadas
 
-- `GET /health`
-- `GET /occupancy/latest`
+En `outputs/offline/`:
 
-Respuesta ejemplo de `GET /occupancy/latest`:
+- `test_1_frames.jsonl` o `test_2_frames.jsonl`: estado por frame
+- `test_1_summary.json` o `test_2_summary.json`: resumen por video
+- `batch_summary.json`: resumen global de la corrida
+- `test_1_annotated.mp4` o `test_2_annotated.mp4`: video final con YOLO aplicado
 
-```json
-{
-	"timestamp": "2026-03-11T10:00:00+00:00",
-	"frame_index": 42,
-	"total_spots": 3,
-	"occupied_spots": 2,
-	"free_spots": 1,
-	"spots": [
-		{"spot_id": "A1", "occupied": true},
-		{"spot_id": "A2", "occupied": false},
-		{"spot_id": "A3", "occupied": true}
-	],
-	"detections": []
-}
+### 6) Comandos de validacion rapida
+
+Ver resumen global:
+
+```powershell
+Get-Content outputs\offline\batch_summary.json
 ```
 
-## Notas de Produccion (Siguiente Etapa)
+Ver solo metricas clave (promedio y maximo ocupadas):
 
-- Persistencia de historico (PostgreSQL/Timescale).
-- Cola/event bus para multiples camaras.
-- Calibracion robusta de plazas con herramientas de anotacion.
-- Metrics y observabilidad (Prometheus + Grafana).
+```powershell
+$data = Get-Content outputs\offline\batch_summary.json | ConvertFrom-Json
+$data | Select-Object video, frames_processed, avg_occupied_spots, max_occupied_spots
+```
+
+### 7) Opciones utiles
+
+- Procesar solo una parte del video: `--max-frames 300`
+- Cambiar modelo: `--model yolov8s.pt`
+- Cambiar confianza: `--confidence 0.35`
+- Desactivar render de video anotado: `--no-render-video`
+
+Ejemplo corto (100 frames, sin video anotado):
+
+```powershell
+python scripts\run_offline_batch.py --videos ".\data\videos\test_1.mp4" --spots "config\yolo_roi_test1.json" --max-frames 100 --no-render-video
+```
+
+## Estado actual
+
+- Paso 1 completado: estructura inicial del repositorio.
+- Paso 2 completado: entorno virtual y dependencias instaladas.
+- Paso 3 completado: pipeline CV + batch offline + export de video YOLO anotado.
+- Paso 4 pendiente: API FastAPI.
+- Paso 5 pendiente: dashboard Streamlit.

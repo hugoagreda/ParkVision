@@ -18,25 +18,27 @@ class ParkingPipeline:
 
     def __post_init__(self) -> None:
         self.video_source = VideoSource(self.source)
-        self.detector = YoloDetector(self.model_path, self.confidence)
-        self.spot_manager = SpotManager(self.spot_config_path)
+        self.detector = YoloDetector(model_path=self.model_path, confidence=self.confidence)
+        self.spot_manager = SpotManager(spot_config_path=self.spot_config_path)
 
-    def run_once(self, frame: Any) -> dict[str, Any]:
+    def process_frame(self, frame: Any) -> dict[str, Any]:
         detections = self.detector.detect(frame)
         spots = self.spot_manager.evaluate(detections)
-        occupied_count = sum(1 for s in spots if s["occupied"])
+        occupied = sum(1 for spot in spots if spot["occupied"])
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_spots": len(spots),
-            "occupied_spots": occupied_count,
-            "free_spots": len(spots) - occupied_count,
+            "occupied_spots": occupied,
+            "free_spots": len(spots) - occupied,
             "spots": spots,
             "detections": detections,
         }
 
-    def stream(self):
+    def stream(self, include_frame: bool = False):
         for frame, frame_index in self.video_source.frames():
-            state = self.run_once(frame)
+            state = self.process_frame(frame)
             state["frame_index"] = frame_index
+            if include_frame:
+                state["_frame"] = frame
             yield state

@@ -12,7 +12,7 @@ class VideoSource:
     source: str | int
 
     def frames(self) -> Generator[Tuple[np.ndarray, int], None, None]:
-        """Yield frames and frame index from a camera index or video file."""
+        """Yield frames and frame index from a camera index or video file path."""
         capture = cv2.VideoCapture(self.source)
         if not capture.isOpened():
             raise RuntimeError(f"Unable to open video source: {self.source}")
