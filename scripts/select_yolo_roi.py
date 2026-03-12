@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Optional
 
 import cv2
 import numpy as np
 
+ARROW_LEFT = 2424832
+ARROW_RIGHT = 2555904
+PAGE_UP = 2162688
+PAGE_DOWN = 2228224
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Select YOLO ROI from first frame of a video and save config"
+        description="Navigate a video, define parking spots, and save config"
     )
     parser.add_argument(
         "--video",
@@ -28,20 +34,20 @@ def parse_args() -> argparse.Namespace:
         default="ParkVision ROI Selector",
         help="OpenCV window title",
     )
+    parser.add_argument(
+        "--start-frame",
+        type=int,
+        default=0,
+        help="Frame index to open initially",
+    )
     return parser.parse_args()
 
 
-def read_first_frame(video_path: str):
+def open_video(video_path: str) -> cv2.VideoCapture:
     capture = cv2.VideoCapture(video_path)
     if not capture.isOpened():
         raise RuntimeError(f"Unable to open video: {video_path}")
-
-    ok, frame = capture.read()
-    capture.release()
-    if not ok or frame is None:
-        raise RuntimeError(f"Unable to read first frame from video: {video_path}")
-
-    return frame
+    return capture
 
 
 ZONE_COLORS = [
@@ -51,9 +57,17 @@ ZONE_COLORS = [
 
 
 class PolygonEditor:
-    def __init__(self, frame: np.ndarray, window_name: str) -> None:
-        self.frame = frame
+    def __init__(self, capture: cv2.VideoCapture, window_name: str, start_frame: int = 0) -> None:
+        self.capture = capture
         self.window_name = window_name
+        self.total_frames = max(1, int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT) or 1))
+        self.fps = float(self.capture.get(cv2.CAP_PROP_FPS) or 25.0)
+        if self.fps <= 0:
+            self.fps = 25.0
+        self.frame_index = max(0, min(start_frame, self.total_frames - 1))
+        self.frame = self._read_frame(self.frame_index)
+        self.playing = False
+        self.last_tick = time.perf_counter()
         # Each zone is a list of 4 [x, y] points
         self.zones: list[list[list[int]]] = []
         self.active_zone: int = -1      # index of zone being edited
@@ -69,6 +83,13 @@ class PolygonEditor:
 
         cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(self.window_name, self._on_mouse)
+
+    def _read_frame(self, frame_index: int) -> np.ndarray:
+        self.capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        ok, frame = self.capture.read()
+        if not ok or frame is None:
+            raise RuntimeError(f"Unable to read frame {frame_index}")
+        return frame
 
     def _clone_zones(self) -> list[list[list[int]]]:
         return [[[p[0], p[1]] for p in zone] for zone in self.zones]
@@ -95,6 +116,36 @@ class PolygonEditor:
     def _clamp(self, x: int, y: int) -> tuple[int, int]:
         h, w = self.frame.shape[:2]
         return max(0, min(x, w - 1)), max(0, min(y, h - 1))
+
+    def _seek(self, delta: int) -> None:
+        next_index = max(0, min(self.frame_index + delta, self.total_frames - 1))
+        if next_index == self.frame_index:
+            return
+        self.frame_index = next_index
+        self.frame = self._read_frame(self.frame_index)
+        self.last_tick = time.perf_counter()
+
+    def _update_playback(self) -> None:
+        if not self.playing or self.drawing or self.dragging_corner:
+            self.last_tick = time.perf_counter()
+            return
+
+        now = time.perf_counter()
+        elapsed = now - self.last_tick
+        frames_to_advance = int(elapsed * self.fps)
+        if frames_to_advance <= 0:
+            return
+
+        self.last_tick += frames_to_advance / self.fps
+        next_index = min(self.frame_index + frames_to_advance, self.total_frames - 1)
+        if next_index == self.frame_index:
+            self.playing = False
+            return
+
+        self.frame_index = next_index
+        self.frame = self._read_frame(self.frame_index)
+        if self.frame_index >= self.total_frames - 1:
+            self.playing = False
 
     def _on_mouse(self, event, x, y, _flags, _param) -> None:
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -177,9 +228,14 @@ class PolygonEditor:
 
         # HUD
         zone_count = f"  ({len(self.zones)} zona{'s' if len(self.zones) != 1 else ''})"
+        timestamp_seconds = self.frame_index / self.fps if self.fps > 0 else 0.0
+        playback_label = "PLAY" if self.playing else "PAUSE"
         lines = [
+            f"{playback_label}  Frame {self.frame_index + 1}/{self.total_frames}  t={timestamp_seconds:.2f}s",
             "Click + arrastra: nueva zona" + zone_count,
             "Arrastra esquina: ajustar",
+            "Espacio: play/pause  Flechas izq/der o n/m: mover",
+            "PgUp/PgDn: salto grande  Inicio/Fin: principio/final",
             "d: borrar zona activa  u/Ctrl+Z: deshacer  r: rehacer",
             "s / Enter: guardar  q / Esc: salir",
         ]
@@ -214,28 +270,60 @@ class PolygonEditor:
 
     def edit(self) -> list[list[list[int]]]:
         while True:
+            self._update_playback()
             cv2.imshow(self.window_name, self._draw())
-            key = cv2.waitKey(20) & 0xFF
+            key = cv2.waitKeyEx(20)
 
-            if key in (13, ord("s")):  # Enter or s
+            if key in (13, ord("s"), ord("S")):  # Enter or s
                 cv2.destroyAllWindows()
+                self.capture.release()
                 return self.zones
-            if key in (27, ord("q")):  # Esc or q
+            if key in (27, ord("q"), ord("Q")):  # Esc or q
                 cv2.destroyAllWindows()
+                self.capture.release()
                 return []
-            if key in (ord("u"), 26):  # u or Ctrl+Z
+            if key in (ord("u"), ord("U"), 26):  # u or Ctrl+Z
                 self._undo()
-            if key == ord("r"):
+            if key in (ord("r"), ord("R")):
                 self._redo()
-            if key == ord("d"):
+            if key in (ord("d"), ord("D")):
                 self._delete_active()
+            if key == 32:
+                self.playing = not self.playing
+                self.last_tick = time.perf_counter()
+            if key in (ARROW_LEFT, ord("n"), ord("N")):
+                self._seek(-1)
+                self.playing = False
+            if key in (ARROW_RIGHT, ord("m"), ord("M")):
+                self._seek(1)
+                self.playing = False
+            if key == PAGE_UP:
+                self._seek(-30)
+                self.playing = False
+            if key == PAGE_DOWN:
+                self._seek(30)
+                self.playing = False
+            if key == 2359296:  # Home
+                self.frame_index = 0
+                self.frame = self._read_frame(self.frame_index)
+                self.playing = False
+                self.last_tick = time.perf_counter()
+            if key == 2293760:  # End
+                self.frame_index = self.total_frames - 1
+                self.frame = self._read_frame(self.frame_index)
+                self.playing = False
+                self.last_tick = time.perf_counter()
 
 
 def main() -> None:
     args = parse_args()
-    frame = read_first_frame(args.video)
+    capture = open_video(args.video)
 
-    editor = PolygonEditor(frame=frame, window_name=args.window_name)
+    editor = PolygonEditor(
+        capture=capture,
+        window_name=args.window_name,
+        start_frame=args.start_frame,
+    )
     zones = editor.edit()
 
     if not zones:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
@@ -22,14 +23,28 @@ def run_video(
     model_path: str,
     spots_path: str,
     confidence: float,
+    spot_overlap_threshold: float,
+    occupied_hold_frames: int,
     max_frames: int,
     annotated_video_output: str | None = None,
+    pixel_diff_threshold: float = 18.0,
+    pixel_min_empty_frames: int = 25,
+    use_pixel_validator: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str | None]:
+    cap_probe = cv2.VideoCapture(video_path)
+    source_fps: float = cap_probe.get(cv2.CAP_PROP_FPS) or 30.0
+    cap_probe.release()
+
     pipeline = ParkingPipeline(
         source=video_path,
         model_path=model_path,
         spot_config_path=spots_path,
         confidence=confidence,
+        bbox_overlap_threshold=spot_overlap_threshold,
+        occupied_hold_frames=occupied_hold_frames,
+        pixel_diff_threshold=pixel_diff_threshold,
+        pixel_min_empty_frames=pixel_min_empty_frames,
+        use_pixel_validator=use_pixel_validator,
     )
 
     spot_polygons = {
@@ -48,7 +63,7 @@ def run_video(
                 writer = cv2.VideoWriter(
                     annotated_video_output,
                     cv2.VideoWriter_fourcc(*"mp4v"),
-                    30.0,
+                    source_fps,
                     (width, height),
                 )
 
@@ -111,12 +126,24 @@ def run_video(
         return frames, summary, annotated_video_output
 
     occupied_values = [frame["occupied_spots"] for frame in frames]
+
+    spot_ids = [s["spot_id"] for s in frames[0]["spots"]]
+    spots_stats: dict[str, Any] = {}
+    for spot_id in spot_ids:
+        occ_seq = [int(s["occupied"]) for f in frames for s in f["spots"] if s["spot_id"] == spot_id]
+        changes = sum(1 for i in range(1, len(occ_seq)) if occ_seq[i] != occ_seq[i - 1])
+        spots_stats[spot_id] = {
+            "occupancy_rate_pct": round(mean(occ_seq) * 100, 1),
+            "state_changes": changes,
+        }
+
     summary = {
         "video": video_path,
         "frames_processed": len(frames),
         "avg_occupied_spots": round(mean(occupied_values), 3),
         "max_occupied_spots": max(occupied_values),
         "min_occupied_spots": min(occupied_values),
+        "spots_stats": spots_stats,
         "final_state": frames[-1],
     }
     return frames, summary, annotated_video_output
@@ -133,6 +160,35 @@ def main() -> None:
     parser.add_argument("--model", default="yolov8n.pt", help="YOLO model path")
     parser.add_argument("--spots", default="config/parking_spots.example.json", help="Spot config path")
     parser.add_argument("--confidence", type=float, default=0.35, help="YOLO confidence threshold")
+    parser.add_argument(
+        "--spot-overlap-threshold",
+        type=float,
+        default=0.40,
+        help="Min bbox/polygon overlap ratio to mark spot as occupied",
+    )
+    parser.add_argument(
+        "--occupied-hold-frames",
+        type=int,
+        default=10,
+        help="Frames to keep spot occupied after temporary occlusion",
+    )
+    parser.add_argument(
+        "--pixel-diff-threshold",
+        type=float,
+        default=18.0,
+        help="MAD pixel diff (0-255) to consider a spot occupied by pixel analysis",
+    )
+    parser.add_argument(
+        "--pixel-min-empty-frames",
+        type=int,
+        default=25,
+        help="Frames of YOLO-empty needed before pixel reference is trusted",
+    )
+    parser.add_argument(
+        "--no-pixel-validator",
+        action="store_true",
+        help="Disable pixel-level occupancy validator (use YOLO only)",
+    )
     parser.add_argument(
         "--max-frames",
         type=int,
@@ -167,8 +223,13 @@ def main() -> None:
             model_path=args.model,
             spots_path=args.spots,
             confidence=args.confidence,
+            spot_overlap_threshold=args.spot_overlap_threshold,
+            occupied_hold_frames=args.occupied_hold_frames,
             max_frames=args.max_frames,
             annotated_video_output=annotated_video_path,
+            pixel_diff_threshold=args.pixel_diff_threshold,
+            pixel_min_empty_frames=args.pixel_min_empty_frames,
+            use_pixel_validator=not args.no_pixel_validator,
         )
 
         stem = Path(video).stem
@@ -182,9 +243,21 @@ def main() -> None:
         summary_output.write_text(json.dumps(summary, indent=2, ensure_ascii=True), encoding="utf-8")
         batch_summary.append(summary)
 
+        if frames:
+            csv_output = output_dir / f"{stem}_timeline.csv"
+            spot_ids = [s["spot_id"] for s in frames[0]["spots"]]
+            with csv_output.open("w", newline="", encoding="utf-8") as csv_handle:
+                writer_csv = csv.writer(csv_handle)
+                writer_csv.writerow(["frame_index", "timestamp"] + spot_ids)
+                for f in frames:
+                    spot_map = {s["spot_id"]: int(s["occupied"]) for s in f["spots"]}
+                    writer_csv.writerow([f["frame_index"], f["timestamp"]] + [spot_map.get(sid, 0) for sid in spot_ids])
+
         print(f"[ParkVision] Done: {video}")
         print(f"  - Frames file: {frame_output}")
         print(f"  - Summary file: {summary_output}")
+        if frames:
+            print(f"  - Timeline CSV: {csv_output}")
         if produced_video_path is not None:
             print(f"  - Annotated video: {produced_video_path}")
 

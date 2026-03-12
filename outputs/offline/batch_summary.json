@@ -1,23 +1,45 @@
 [
   {
     "video": ".\\data\\videos\\test_1.mp4",
-    "frames_processed": 30,
-    "avg_occupied_spots": 3,
-    "max_occupied_spots": 4,
-    "min_occupied_spots": 2,
+    "frames_processed": 635,
+    "avg_occupied_spots": 3.97,
+    "max_occupied_spots": 5,
+    "min_occupied_spots": 3,
+    "spots_stats": {
+      "Z1": {
+        "occupancy_rate_pct": 98.1,
+        "state_changes": 2
+      },
+      "Z2": {
+        "occupancy_rate_pct": 79.4,
+        "state_changes": 1
+      },
+      "Z3": {
+        "occupancy_rate_pct": 47.1,
+        "state_changes": 9
+      },
+      "Z4": {
+        "occupancy_rate_pct": 100,
+        "state_changes": 0
+      },
+      "Z5": {
+        "occupancy_rate_pct": 72.4,
+        "state_changes": 7
+      }
+    },
     "final_state": {
-      "timestamp": "2026-03-11T20:13:38.235628+00:00",
-      "total_spots": 14,
-      "occupied_spots": 4,
-      "free_spots": 10,
+      "timestamp": "2026-03-12T19:02:09.504986+00:00",
+      "total_spots": 5,
+      "occupied_spots": 3,
+      "free_spots": 2,
       "spots": [
         {
           "spot_id": "Z1",
-          "occupied": false
+          "occupied": true
         },
         {
           "spot_id": "Z2",
-          "occupied": false
+          "occupied": true
         },
         {
           "spot_id": "Z3",
@@ -25,162 +47,82 @@
         },
         {
           "spot_id": "Z4",
-          "occupied": false
+          "occupied": true
         },
         {
           "spot_id": "Z5",
           "occupied": false
-        },
-        {
-          "spot_id": "Z6",
-          "occupied": true
-        },
-        {
-          "spot_id": "Z7",
-          "occupied": false
-        },
-        {
-          "spot_id": "Z8",
-          "occupied": false
-        },
-        {
-          "spot_id": "Z9",
-          "occupied": false
-        },
-        {
-          "spot_id": "Z10",
-          "occupied": false
-        },
-        {
-          "spot_id": "Z11",
-          "occupied": false
-        },
-        {
-          "spot_id": "Z12",
-          "occupied": true
-        },
-        {
-          "spot_id": "Z13",
-          "occupied": true
-        },
-        {
-          "spot_id": "Z14",
-          "occupied": true
         }
       ],
       "detections": [
         {
           "class_id": 2,
           "label": "car",
-          "confidence": 0.8384280800819397,
+          "confidence": 0.7811769247055054,
           "bbox": [
-            1091.3902587890625,
-            598.5400390625,
-            1317.20361328125,
-            694.6213989257812
+            1491.8768310546875,
+            615.1693725585938,
+            1659.8079833984375,
+            729.7626953125
           ]
         },
         {
           "class_id": 2,
           "label": "car",
-          "confidence": 0.735277533531189,
+          "confidence": 0.7710615396499634,
           "bbox": [
-            1508.8402099609375,
-            621.2820434570312,
-            1662.305419921875,
-            732.4600219726562
+            607.5611572265625,
+            631.1727905273438,
+            849.4171142578125,
+            736.1483154296875
           ]
         },
         {
           "class_id": 2,
           "label": "car",
-          "confidence": 0.7347944974899292,
+          "confidence": 0.7556095123291016,
           "bbox": [
-            607.8136596679688,
-            632.135986328125,
-            847.6052856445312,
-            735.1815185546875
+            1273.14111328125,
+            621.5881958007812,
+            1448.3203125,
+            767.353515625
           ]
         },
         {
           "class_id": 2,
           "label": "car",
-          "confidence": 0.7239904403686523,
+          "confidence": 0.6793609857559204,
           "bbox": [
-            1397.8165283203125,
-            625.1063232421875,
-            1578.781494140625,
-            751.9700317382812
+            1136.574951171875,
+            633.895751953125,
+            1287.0924072265625,
+            774.0989379882812
           ]
         },
         {
           "class_id": 2,
           "label": "car",
-          "confidence": 0.5634051561355591,
+          "confidence": 0.39460960030555725,
           "bbox": [
-            1668.468505859375,
-            644.3525390625,
-            1757.837158203125,
-            718.1536254882812
+            1575.2366943359375,
+            584.0755004882812,
+            1675.284423828125,
+            652.9290161132812
           ]
         },
         {
           "class_id": 2,
           "label": "car",
-          "confidence": 0.5410445332527161,
+          "confidence": 0.3534768521785736,
           "bbox": [
-            800.612060546875,
-            566.855224609375,
-            870.71875,
-            631.1635131835938
-          ]
-        },
-        {
-          "class_id": 2,
-          "label": "car",
-          "confidence": 0.5396716594696045,
-          "bbox": [
-            1436.0758056640625,
-            568.329833984375,
-            1591.9691162109375,
-            633.84228515625
-          ]
-        },
-        {
-          "class_id": 2,
-          "label": "car",
-          "confidence": 0.536942183971405,
-          "bbox": [
-            933.7388305664062,
-            589.7499389648438,
-            1081.716552734375,
-            654.8783569335938
-          ]
-        },
-        {
-          "class_id": 2,
-          "label": "car",
-          "confidence": 0.3934946060180664,
-          "bbox": [
-            1558.0283203125,
-            627.8273315429688,
-            1661.2928466796875,
-            729.5460815429688
-          ]
-        },
-        {
-          "class_id": 2,
-          "label": "car",
-          "confidence": 0.3607930541038513,
-          "bbox": [
-            1606.1689453125,
-            617.8203735351562,
-            1757.93994140625,
-            719.6610717773438
+            799.66552734375,
+            564.81005859375,
+            874.682373046875,
+            631.2579956054688
           ]
         }
       ],
-      "frame_index": 29
+      "frame_index": 634
     }
   }
 ]
